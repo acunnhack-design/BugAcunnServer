@@ -59,7 +59,6 @@
         .contact-links { display:flex; justify-content:center; gap:20px; margin-top:20px; border-top:1px solid #222; padding-top:20px; }
         .contact-links a { color:#aaa; text-decoration:none; font-size:14px; font-weight:400; letter-spacing:1px; transition:0.2s; }
         .contact-links a i { margin-right:6px; color:#00ff88; }
-        .contact-links a:active { color:#fff; }
         .login-form { display:none; margin-top:10px; }
         .login-form.active { display:block; }
         .login-form input {
@@ -91,11 +90,18 @@
         }
         .stats span { color:#00ff88; font-weight:700; }
         .logout-btn { background:none; border:none; color:#ff4466; font-size:12px; text-decoration:underline; cursor:pointer; margin-top:10px; }
+        .pairing-section { margin:15px 0; display:flex; gap:8px; flex-wrap:wrap; }
+        .pairing-section input { flex:2; padding:12px 16px; background:rgba(255,255,255,0.05); border:1px solid #333; border-radius:30px; color:#fff; font-size:12px; outline:none; min-width:120px; }
+        .pairing-section button { padding:12px 20px; background:#4466ff; border:none; border-radius:30px; color:#fff; font-weight:bold; cursor:pointer; flex:1; }
+        .attack-selector { display:flex; gap:10px; margin:10px 0; align-items:center; flex-wrap:wrap; }
+        .attack-selector select { flex:2; padding:12px; background:#1a1a1a; border:1px solid #333; border-radius:30px; color:#fff; font-size:12px; outline:none; min-width:150px; }
+        .attack-selector button { flex:1; padding:12px; background:#ff8800; border:none; border-radius:30px; color:#000; font-weight:bold; cursor:pointer; }
         .admin-panel { margin-top:20px; border-top:1px solid #333; padding-top:15px; display:none; }
         .admin-panel.active { display:block; }
         .admin-panel h3 { color:#ffaa00; font-size:16px; margin-bottom:10px; }
         .admin-panel .user-item { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #222; color:#aaa; font-size:12px; }
         .admin-panel .user-item span { color:#fff; }
+        .qr-display { background:#111; padding:15px; border-radius:20px; margin:10px 0; color:#0f0; font-size:12px; word-break:break-all; border:1px solid #00ff8855; max-height:150px; overflow:auto; }
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-track { background:#111; }
         ::-webkit-scrollbar-thumb { background:#00ff88; border-radius:10px; }
@@ -117,7 +123,6 @@
         <div class="feature-card"><i class="fas fa-headset"></i><h4>24/7</h4><p>Support</p></div>
     </div>
 
-    <!-- LANDING -->
     <div id="landingButtons">
         <button class="btn-primary" id="showLoginBtn"><i class="fas fa-sign-in-alt"></i>  SIGN IN</button>
         <button class="btn-secondary" id="buyAccessBtn"><i class="fas fa-crown"></i>  BUY ACCESS</button>
@@ -127,7 +132,6 @@
         </div>
     </div>
 
-    <!-- LOGIN FORM -->
     <div class="login-form" id="loginForm">
         <h3 style="color:#eee; font-size:18px; text-align:center; margin-bottom:15px; letter-spacing:1px;">
             <i class="fas fa-user-secret" style="color:#00ff88;"></i> Welcome Back
@@ -139,13 +143,38 @@
         <button class="btn-secondary" id="backToLanding" style="margin-top:8px;"><i class="fas fa-arrow-left"></i>  Kembali</button>
     </div>
 
-    <!-- DASHBOARD -->
     <div class="dashboard" id="dashboard">
         <div class="stats">
             <span><i class="fas fa-bullseye"></i> Target: <span id="totalTargets">0</span></span>
             <span><i class="fas fa-paper-plane"></i> Spam: <span id="totalSpam">0</span></span>
-            <span><i class="fas fa-circle" style="color:#00ff88;"></i> <span id="connectionStatus">Online</span></span>
+            <span><i class="fas fa-circle" style="color:#00ff88;"></i> <span id="connectionStatus">Offline</span></span>
         </div>
+
+        <div class="pairing-section">
+            <input type="text" id="pairPhone" placeholder="628xxx (pairing code)">
+            <button id="pairBtn"><i class="fas fa-link"></i> Pairing</button>
+            <button id="qrBtn" style="background:#00aa88;"><i class="fas fa-qrcode"></i> QR</button>
+        </div>
+        <div id="qrDisplay" class="qr-display" style="display:none;"></div>
+
+        <div class="attack-selector">
+            <select id="attackType">
+                <option value="crash_ui">💥 CRASH UI (by @PANCYOFFICIAL)</option>
+                <option value="delay_invisible">🌀 DELAY INVISIBLE</option>
+                <option value="crash_ios_invisible">🍎 CRASH IOS INVISIBLE</option>
+                <option value="force_close_1msg">💀 FORCE CLOSE INFINITY 1 MSG</option>
+                <option value="force_close_invisible">👻 FORCE CLOSE INVISIBLE</option>
+                <option value="force_close_ios_invisible">🍏 FORCE CLOSE IOS INVISIBLE</option>
+                <option value="spam_call">📞 SPAM CALL</option>
+                <option value="delay_hard_invisible">⏳ DELAY HARD INVISIBLE</option>
+                <option value="blank_andro">📱 BLANK ANDRO</option>
+                <option value="force_close_infinity">♾️ FORCE CLOSE INFINITY</option>
+                <option value="video_exploit">🎬 VIDEO EXPLOIT</option>
+                <option value="cyclone" selected>🌀 CYCLONE (ALL-IN-ONE)</option>
+            </select>
+            <button id="setAttackBtn">Set</button>
+        </div>
+
         <div class="add-target">
             <input type="text" id="newTarget" placeholder="628xxx (nomor target)">
             <select id="roleSelect"><option value="admin">👑 Admin</option><option value="users">👤 User</option></select>
@@ -162,7 +191,6 @@
         </div>
         <button class="logout-btn" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</button>
 
-        <!-- Admin Panel (hanya muncul jika username admin) -->
         <div class="admin-panel" id="adminPanel">
             <h3><i class="fas fa-user-cog"></i> Admin Panel</h3>
             <div style="display:flex; gap:8px; margin-bottom:10px;">
@@ -176,8 +204,7 @@
 </div>
 
 <script>
-let token = null;
-let username = null;
+let token = null, username = null;
 let userData = { targets: { admin: [], users: [] }, totalSpam: 0, connected: false };
 
 const landing = document.getElementById('landingButtons');
@@ -189,6 +216,7 @@ const totalTargets = document.getElementById('totalTargets');
 const totalSpam = document.getElementById('totalSpam');
 const connectionStatus = document.getElementById('connectionStatus');
 const adminPanel = document.getElementById('adminPanel');
+const qrDisplay = document.getElementById('qrDisplay');
 
 async function apiCall(endpoint, options = {}) {
     const headers = { 'Content-Type': 'application/json' };
@@ -229,11 +257,9 @@ async function fetchStatus() {
         totalSpam.textContent = userData.totalSpam;
         connectionStatus.textContent = userData.connected ? 'Online' : 'Offline';
         connectionStatus.style.color = userData.connected ? '#00ff88' : '#ff4466';
+        if (data.attackType) document.getElementById('attackType').value = data.attackType;
         renderTargets();
-        // Jika admin, ambil daftar user
-        if (username === 'admin') {
-            fetchUsers();
-        }
+        if (username === 'admin') fetchUsers();
     } catch(e) { console.log(e); }
 }
 
@@ -274,10 +300,7 @@ async function login() {
         landing.style.display = 'none';
         loginForm.classList.remove('active');
         dashboard.classList.add('active');
-        if (username === 'admin') {
-            adminPanel.classList.add('active');
-        }
-        // Start WA session otomatis?
+        if (username === 'admin') adminPanel.classList.add('active');
         await apiCall('/api/start', { method: 'POST' });
         fetchStatus();
         setInterval(fetchStatus, 5000);
@@ -290,8 +313,7 @@ async function login() {
 }
 
 function logout() {
-    token = null;
-    username = null;
+    token = null; username = null;
     dashboard.classList.remove('active');
     adminPanel.classList.remove('active');
     landing.style.display = 'block';
@@ -300,47 +322,106 @@ function logout() {
     localStorage.removeItem('bugacunn_user');
 }
 
-// Event listeners
-document.getElementById('showLoginBtn').addEventListener('click', () => {
-    landing.style.display = 'none';
-    loginForm.classList.add('active');
+document.getElementById('pairBtn').addEventListener('click', async () => {
+    const phone = document.getElementById('pairPhone').value.trim();
+    if (!phone || phone.length < 10) { alert('Masukkan nomor dengan benar!'); return; }
+    try {
+        const res = await apiCall('/api/pair', { method: 'POST', body: JSON.stringify({ phone }) });
+        if (res.code) {
+            alert('Kode pairing: ' + res.code + '\nMasukkan di WhatsApp target.');
+        } else if (res.error) {
+            alert('Error: ' + res.error);
+        }
+    } catch(e) { alert('Gagal pairing: ' + e.message); }
 });
-document.getElementById('backToLanding').addEventListener('click', () => {
-    loginForm.classList.remove('active');
-    landing.style.display = 'block';
+
+document.getElementById('qrBtn').addEventListener('click', async () => {
+    try {
+        const res = await apiCall('/api/qr');
+        if (res.qr) {
+            qrDisplay.style.display = 'block';
+            qrDisplay.textContent = res.qr;
+        } else {
+            alert('Tidak ada QR aktif. Coba START dulu.');
+        }
+    } catch(e) {
+        alert('Gagal ambil QR: ' + e.message);
+    }
 });
-document.getElementById('loginBtn').addEventListener('click', login);
-document.getElementById('loginPassword').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
-document.getElementById('loginUsername').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
+
+document.getElementById('setAttackBtn').addEventListener('click', async () => {
+    const type = document.getElementById('attackType').value;
+    await apiCall('/api/setattack', { method: 'POST', body: JSON.stringify({ type }) });
+    alert('Serangan diubah ke ' + type);
+});
 
 document.getElementById('addTargetBtn').addEventListener('click', async () => {
     const num = document.getElementById('newTarget').value.trim();
     const role = document.getElementById('roleSelect').value;
-    if (!num || num.length < 10) { alert('Nomor minimal 10 digit, goblok!'); return; }
-    await apiCall('/api/targets', { method: 'POST', body: JSON.stringify({ number: num, role }) });
+    if (!num || num.length < 10) {
+        alert('Nomor minimal 10 digit, goblok!');
+        return;
+    }
+    await apiCall('/api/targets', {
+        method: 'POST',
+        body: JSON.stringify({ number: num, role })
+    });
     document.getElementById('newTarget').value = '';
     fetchStatus();
 });
 
-document.getElementById('logoutBtn').addEventListener('click', logout);
 document.getElementById('startSpamBtn').addEventListener('click', async () => {
     await apiCall('/api/start', { method: 'POST' });
     fetchStatus();
 });
+
 document.getElementById('stopSpamBtn').addEventListener('click', async () => {
     await apiCall('/api/stop', { method: 'POST' });
     fetchStatus();
 });
 
-document.getElementById('contactTelegram').addEventListener('click', e => { e.preventDefault(); window.open('https://t.me/Acunn', '_blank'); });
-document.getElementById('contactWhatsapp').addEventListener('click', e => { e.preventDefault(); window.open('https://wa.me/6281234567890', '_blank'); });
-document.getElementById('buyAccessBtn').addEventListener('click', () => alert('Hubungi @Acunn di Telegram untuk beli akses!'));
+// Login UI
+document.getElementById('showLoginBtn').addEventListener('click', () => {
+    landing.style.display = 'none';
+    loginForm.classList.add('active');
+});
+
+document.getElementById('backToLanding').addEventListener('click', () => {
+    loginForm.classList.remove('active');
+    landing.style.display = 'block';
+});
+
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') login();
+});
+document.getElementById('loginUsername').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') login();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', logout);
+
+// Contact
+document.getElementById('contactTelegram').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.open('https://t.me/Acunn', '_blank');
+});
+document.getElementById('contactWhatsapp').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.open('https://wa.me/6281234567890', '_blank');
+});
+document.getElementById('buyAccessBtn').addEventListener('click', () => {
+    alert('Hubungi @Acunn di Telegram untuk beli akses!');
+});
 
 // Admin: tambah user
 document.getElementById('addUserBtn').addEventListener('click', async () => {
     const uname = document.getElementById('newUser').value.trim();
     const pass = document.getElementById('newPass').value.trim();
-    if (!uname || !pass) { alert('Isi username dan password!'); return; }
+    if (!uname || !pass) {
+        alert('Isi username dan password!');
+        return;
+    }
     const res = await apiCall('/api/admin/adduser', {
         method: 'POST',
         body: JSON.stringify({ username: uname, password: pass })
@@ -355,7 +436,7 @@ document.getElementById('addUserBtn').addEventListener('click', async () => {
     }
 });
 
-// Auto login dari localStorage
+// Auto-login dari localStorage
 const savedToken = localStorage.getItem('bugacunn_token');
 const savedUser = localStorage.getItem('bugacunn_user');
 if (savedToken && savedUser) {
