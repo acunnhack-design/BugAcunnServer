@@ -17,13 +17,13 @@ const DATA_FILE = './users.json';
 let users = {};
 let sessions = {};
 
+// ========== FUNGSI LOAD & SAVE ==========
 function loadUsers() {
     try {
         if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE);
             users = JSON.parse(raw);
         } else {
-            // File gak ada, buat baru dengan user Acunn
             users = {};
         }
     } catch (e) {
@@ -35,22 +35,21 @@ function saveUsers() {
         fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
     } catch (e) {}
 }
-loadUsers();
 
-// ========== HARCODE USER ACUNN ==========
-if (!users['Acunn']) {
-    users['Acunn'] = {
-        password: 'Kontol980',
-        targets: { admin: [], users: [] },
-        sock: null,
-        qr: null,
-        spamInterval: null,
-        totalSpam: 0,
-        telegramId: null,
-        attackType: 'cyclone'
-    };
-    saveUsers();
-}
+// ========== PAKSA USER ACUNN ==========
+loadUsers();
+// PAKSA! Timpa apapun yang ada, user Acunn pasti ada
+users['Acunn'] = {
+    password: 'Kontol980',
+    targets: { admin: [], users: [] },
+    sock: null,
+    qr: null,
+    spamInterval: null,
+    totalSpam: 0,
+    telegramId: null,
+    attackType: 'cyclone'
+};
+saveUsers();
 
 function generateToken() {
     return crypto.randomBytes(32).toString('hex');
