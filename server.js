@@ -9,7 +9,7 @@ app.use(express.static('public'));
 
 // ========== KONFIGURASI ==========
 const BOT_TOKEN = '8929432221:AAG3K8a6THua8Qf33mNEJHpc3iv_7W0tZtc'; // GANTI
-const OWNER_ID = '123456789'; // GANTI DENGAN ID TELEGRAM LU
+const OWNER_ID = '8718615350'; // GANTI DENGAN ID TELEGRAM LU
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // ========== DATA USER ==========
