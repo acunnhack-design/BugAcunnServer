@@ -7,7 +7,7 @@ const QRCode = require('qrcode');
 
 const app = express();
 
-// ===== MANUAL CORS (GANTI MODUL CORS) =====
+// ===== MANUAL CORS (BIAR APK BISA AKSES) =====
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Content-Type, x-token');
@@ -260,7 +260,7 @@ bot.onText(/\/qr/, async (msg) => {
     }
 });
 
-// ===== PAIRING KODE 8 DIGIT =====
+// ===== PAIRING KODE 8 DIGIT (FIX) =====
 bot.onText(/\/pair (.+)/, async (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
     if (!username || !isUserAuthorized(username)) {
@@ -345,48 +345,60 @@ async function startWASession(username) {
     saveUsers();
 }
 
+// ===== PAIRING FUNCTION (FIX) =====
 async function pairWASession(username, phoneNumber) {
     const user = users[username];
-    if (user.sock) { try { await user.sock.end(); } catch(e) {} user.sock = null; }
+    // Matikan session lama
+    if (user.sock) {
+        try { await user.sock.end(); } catch(e) {}
+        user.sock = null;
+    }
+    // Hapus folder session
     const sessionPath = `./sessions/${username}`;
     if (fs.existsSync(sessionPath)) {
         fs.rmSync(sessionPath, { recursive: true, force: true });
     }
+    // Buat socket baru dengan pairing
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false, // MATIKAN QR DI TERMINAL
         browser: ['BugAcunn', 'Chrome', '120.0.0.0']
     });
     sock.ev.on('creds.update', saveCreds);
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        if (qr) {
-            user.qr = qr;
-            if (user.telegramId) {
-                bot.sendMessage(user.telegramId, `📱 Scan QR:\n${qr}`);
-            }
-        }
+    
+    // Event listener untuk pairing
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
         if (connection === 'open') {
             user.sock = sock;
             user.qr = null;
             console.log(`✅ ${username} connected via pairing`);
-            setupAntiRevoke(sock, username);
             updateSpamForUser(username);
-            if (user.telegramId) bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
+            if (user.telegramId) {
+                bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
+            }
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
             if (reason === DisconnectReason.loggedOut || reason === 401) {
                 user.sock = null;
-                if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session logout. Ulangi pairing.');
+                if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session logout.');
             }
         }
     });
-    user.sock = sock;
-    saveUsers();
-    const code = await sock.requestPairingCode(phoneNumber);
-    return code;
+
+    // Minta kode pairing (dengan timeout)
+    try {
+        const code = await sock.requestPairingCode(phoneNumber);
+        user.sock = sock; // simpan setelah pairing berhasil
+        saveUsers();
+        return code;
+    } catch (err) {
+        // Jika pairing gagal, tutup socket
+        try { await sock.end(); } catch(e) {}
+        throw new Error('Gagal meminta kode pairing: ' + err.message);
+    }
 }
 
 function updateSpamForUser(username) {
