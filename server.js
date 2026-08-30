@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const TelegramBot = require('node-telegram-bot-api');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const fs = require('fs');
@@ -8,8 +7,15 @@ const QRCode = require('qrcode');
 
 const app = express();
 
-// ===== CORS (biar APK bisa akses dari file://) =====
-app.use(cors());
+// ===== MANUAL CORS (GANTI MODUL CORS) =====
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, x-token');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+});
+
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -63,7 +69,7 @@ function saveSessions() {
 loadUsers();
 loadSessions();
 
-// ===== HARCODE ADMIN ACUNN (NO EXPIRED) =====
+// ===== HARCODE ADMIN ACUNN =====
 users['Acunn'] = {
     password: 'Kontol980',
     role: 'admin',
@@ -91,7 +97,6 @@ function isExpired(user) {
 }
 
 // ========== TELEGRAM BOT ==========
-// ===== OWNER ONLY =====
 bot.onText(/\/adduser (.+) (.+) (.+) (.+)/, (msg, match) => {
     if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
     const username = match[1], password = match[2], role = match[3].toLowerCase(), expired = match[4];
@@ -134,7 +139,6 @@ bot.onText(/\/setexpired (.+) (.+)/, (msg, match) => {
     bot.sendMessage(msg.chat.id, `✅ User ${username} expired diubah jadi ${expired}`);
 });
 
-// ===== UMUM =====
 bot.onText(/\/login (.+) (.+)/, (msg, match) => {
     const username = match[1], password = match[2];
     if (!users[username] || users[username].password !== password)
@@ -502,7 +506,6 @@ function auth(req, res, next) {
     next();
 }
 
-// ========== REST API ==========
 // ===== STATUS =====
 app.get('/api/status', auth, (req, res) => {
     const user = users[req.username];
