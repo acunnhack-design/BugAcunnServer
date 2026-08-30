@@ -164,7 +164,8 @@ bot.onText(/\/help/, (msg) => {
 /startspam – mulai spam
 /stopspam – hentikan spam
 /status – lihat status
-/getqr – dapatkan QR code
+/qr – dapatkan QR code (GAMBAR)
+/pair [nomor] – dapatkan kode pairing 8 digit
 /setattack [mode] – ganti mode serangan
 /extract [nomor] – ekstrak chat target
 /rotate – rotasi session
@@ -230,12 +231,40 @@ bot.onText(/\/status/, (msg) => {
 `);
 });
 
-bot.onText(/\/getqr/, (msg) => {
+// ===== QR GAMBAR VIA TELEGRAM =====
+bot.onText(/\/qr/, async (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
+    if (!username || !isUserAuthorized(username)) {
+        return bot.sendMessage(msg.chat.id, '❌ Login dulu!');
+    }
     const user = users[username];
-    if (user.qr) bot.sendMessage(msg.chat.id, `📱 Scan QR:\n${user.qr}`);
-    else bot.sendMessage(msg.chat.id, '❌ Tidak ada QR aktif. Coba /startspam');
+    if (!user.qr) {
+        return bot.sendMessage(msg.chat.id, '❌ Belum ada QR. Kirim /startspam dulu.');
+    }
+    try {
+        const qrBuffer = await QRCode.toBuffer(user.qr, { type: 'png', margin: 2 });
+        await bot.sendPhoto(msg.chat.id, qrBuffer, { caption: '📱 Scan QR ini di WhatsApp' });
+    } catch (e) {
+        bot.sendMessage(msg.chat.id, '❌ Gagal generate QR: ' + e.message);
+    }
+});
+
+// ===== PAIRING KODE 8 DIGIT =====
+bot.onText(/\/pair (.+)/, async (msg, match) => {
+    const username = getUsernameFromChat(msg.chat.id);
+    if (!username || !isUserAuthorized(username)) {
+        return bot.sendMessage(msg.chat.id, '❌ Login dulu!');
+    }
+    const phone = match[1];
+    if (!phone || phone.length < 10) {
+        return bot.sendMessage(msg.chat.id, '❌ Nomor tidak valid. Format: 628xxx');
+    }
+    try {
+        const code = await pairWASession(username, phone);
+        bot.sendMessage(msg.chat.id, `✅ KODE PAIRING: ${code}\nMasukkan di WhatsApp dalam 5 menit.`);
+    } catch (e) {
+        bot.sendMessage(msg.chat.id, '❌ Gagal pairing: ' + e.message);
+    }
 });
 
 bot.onText(/\/setattack (.+)/, (msg, match) => {
@@ -307,7 +336,6 @@ async function startWASession(username) {
 
 async function pairWASession(username, phoneNumber) {
     const user = users[username];
-    // Hapus session lama
     if (user.sock) { try { await user.sock.end(); } catch(e) {} user.sock = null; }
     const sessionPath = `./sessions/${username}`;
     if (fs.existsSync(sessionPath)) {
@@ -461,6 +489,7 @@ function auth(req, res, next) {
     next();
 }
 
+// ========== REST API ==========
 app.get('/api/status', auth, (req, res) => {
     const user = users[req.username];
     res.json({
@@ -480,6 +509,7 @@ app.post('/api/stop', auth, (req, res) => {
     stopSpamForUser(req.username);
     res.json({ message: 'Spam stopped' });
 });
+
 app.post('/api/targets', auth, (req, res) => {
     const { number, role } = req.body;
     if (!number || !role) return res.status(400).json({ error: 'Missing fields' });
@@ -664,7 +694,7 @@ app.post('/api/admin/setexpired', auth, (req, res) => {
     res.json({ success: true, message: `User ${username} expired diubah jadi ${expired}` });
 });
 
-// ========== JALANKAN ==========
+// ========== JALANKAN SERVER ==========
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
