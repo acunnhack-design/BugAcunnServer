@@ -7,7 +7,7 @@ const QRCode = require('qrcode');
 
 const app = express();
 
-// ===== MANUAL CORS (BIAR APK BISA AKSES) =====
+// ===== MANUAL CORS =====
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Content-Type, x-token');
@@ -260,7 +260,7 @@ bot.onText(/\/qr/, async (msg) => {
     }
 });
 
-// ===== PAIRING KODE 8 DIGIT (FIX) =====
+// ===== PAIRING KODE 8 DIGIT =====
 bot.onText(/\/pair (.+)/, async (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
     if (!username || !isUserAuthorized(username)) {
@@ -345,29 +345,20 @@ async function startWASession(username) {
     saveUsers();
 }
 
-// ===== PAIRING FUNCTION (FIX) =====
 async function pairWASession(username, phoneNumber) {
     const user = users[username];
-    // Matikan session lama
-    if (user.sock) {
-        try { await user.sock.end(); } catch(e) {}
-        user.sock = null;
-    }
-    // Hapus folder session
+    if (user.sock) { try { await user.sock.end(); } catch(e) {} user.sock = null; }
     const sessionPath = `./sessions/${username}`;
     if (fs.existsSync(sessionPath)) {
         fs.rmSync(sessionPath, { recursive: true, force: true });
     }
-    // Buat socket baru dengan pairing
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // MATIKAN QR DI TERMINAL
+        printQRInTerminal: false,
         browser: ['BugAcunn', 'Chrome', '120.0.0.0']
     });
     sock.ev.on('creds.update', saveCreds);
-    
-    // Event listener untuk pairing
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'open') {
@@ -387,15 +378,12 @@ async function pairWASession(username, phoneNumber) {
             }
         }
     });
-
-    // Minta kode pairing (dengan timeout)
     try {
         const code = await sock.requestPairingCode(phoneNumber);
-        user.sock = sock; // simpan setelah pairing berhasil
+        user.sock = sock;
         saveUsers();
         return code;
     } catch (err) {
-        // Jika pairing gagal, tutup socket
         try { await sock.end(); } catch(e) {}
         throw new Error('Gagal meminta kode pairing: ' + err.message);
     }
@@ -498,7 +486,7 @@ app.post('/api/login', (req, res) => {
     const token = generateToken();
     sessions[token] = username;
     saveSessions();
-    res.json({ token, username, role: users[username].role });
+        res.json({ token, username, role: users[username].role });
 });
 
 // ===== MIDDLEWARE AUTH =====
