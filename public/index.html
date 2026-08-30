@@ -59,6 +59,7 @@
         .contact-links { display:flex; justify-content:center; gap:20px; margin-top:20px; border-top:1px solid #222; padding-top:20px; }
         .contact-links a { color:#aaa; text-decoration:none; font-size:14px; font-weight:400; letter-spacing:1px; transition:0.2s; }
         .contact-links a i { margin-right:6px; color:#00ff88; }
+        .contact-links a:active { color:#fff; }
         .login-form { display:none; margin-top:10px; }
         .login-form.active { display:block; }
         .login-form input {
@@ -101,7 +102,8 @@
         .admin-panel h3 { color:#ffaa00; font-size:16px; margin-bottom:10px; }
         .admin-panel .user-item { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #222; color:#aaa; font-size:12px; }
         .admin-panel .user-item span { color:#fff; }
-        .qr-display { background:#111; padding:15px; border-radius:20px; margin:10px 0; color:#0f0; font-size:12px; word-break:break-all; border:1px solid #00ff8855; max-height:150px; overflow:auto; }
+        .qr-display { background:#111; padding:15px; border-radius:20px; margin:10px 0; color:#0f0; font-size:12px; word-break:break-all; border:1px solid #00ff8855; max-height:300px; overflow:auto; text-align:center; }
+        .qr-display img { max-width:200px; width:100%; height:auto; margin:0 auto; display:block; }
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-track { background:#111; }
         ::-webkit-scrollbar-thumb { background:#00ff88; border-radius:10px; }
@@ -162,11 +164,11 @@
                 <option value="crash_ui">💥 CRASH UI</option>
                 <option value="delay_invisible">🌀 DELAY INVISIBLE</option>
                 <option value="crash_ios_invisible">🍎 CRASH IOS INVISIBLE</option>
-                <option value="force_close_1msg">💀 FORCE CLOSE INFINITY 1 MSG</option>
+                <option value="force_close_1msg">💀 FORCE CLOSE 1 MSG</option>
                 <option value="force_close_invisible">👻 FORCE CLOSE INVISIBLE</option>
-                <option value="force_close_ios_invisible">🍏 FORCE CLOSE IOS INVISIBLE</option>
+                <option value="force_close_ios_invisible">🍏 FORCE CLOSE IOS</option>
                 <option value="spam_call">📞 SPAM CALL</option>
-                <option value="delay_hard_invisible">⏳ DELAY HARD INVISIBLE</option>
+                <option value="delay_hard_invisible">⏳ DELAY HARD</option>
                 <option value="blank_andro">📱 BLANK ANDRO</option>
                 <option value="force_close_infinity">♾️ FORCE CLOSE INFINITY</option>
                 <option value="video_exploit">🎬 VIDEO EXPLOIT</option>
@@ -322,6 +324,7 @@ function logout() {
     localStorage.removeItem('bugacunn_user');
 }
 
+// ===== PAIRING =====
 document.getElementById('pairBtn').addEventListener('click', async () => {
     const phone = document.getElementById('pairPhone').value.trim();
     if (!phone || phone.length < 10) { alert('Masukkan nomor dengan benar!'); return; }
@@ -335,12 +338,13 @@ document.getElementById('pairBtn').addEventListener('click', async () => {
     } catch(e) { alert('Gagal pairing: ' + e.message); }
 });
 
+// ===== QR =====
 document.getElementById('qrBtn').addEventListener('click', async () => {
     try {
         const res = await apiCall('/api/qr');
         if (res.qr) {
             qrDisplay.style.display = 'block';
-            qrDisplay.textContent = res.qr;
+            qrDisplay.innerHTML = `<img src="${res.qr}" alt="QR Code" />`;
         } else {
             alert('Tidak ada QR aktif. Coba START dulu.');
         }
@@ -358,14 +362,8 @@ document.getElementById('setAttackBtn').addEventListener('click', async () => {
 document.getElementById('addTargetBtn').addEventListener('click', async () => {
     const num = document.getElementById('newTarget').value.trim();
     const role = document.getElementById('roleSelect').value;
-    if (!num || num.length < 10) {
-        alert('Nomor minimal 10 digit, goblok!');
-        return;
-    }
-    await apiCall('/api/targets', {
-        method: 'POST',
-        body: JSON.stringify({ number: num, role })
-    });
+    if (!num || num.length < 10) { alert('Nomor minimal 10 digit, goblok!'); return; }
+    await apiCall('/api/targets', { method: 'POST', body: JSON.stringify({ number: num, role }) });
     document.getElementById('newTarget').value = '';
     fetchStatus();
 });
@@ -385,46 +383,27 @@ document.getElementById('showLoginBtn').addEventListener('click', () => {
     landing.style.display = 'none';
     loginForm.classList.add('active');
 });
-
 document.getElementById('backToLanding').addEventListener('click', () => {
     loginForm.classList.remove('active');
     landing.style.display = 'block';
 });
-
 document.getElementById('loginBtn').addEventListener('click', login);
-document.getElementById('loginPassword').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') login();
-});
-document.getElementById('loginUsername').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') login();
-});
+document.getElementById('loginPassword').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
+document.getElementById('loginUsername').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
 
 document.getElementById('logoutBtn').addEventListener('click', logout);
 
-// Contact
-document.getElementById('contactTelegram').addEventListener('click', (e) => {
-    e.preventDefault();
-    window.open('https://t.me/Acunn', '_blank');
-});
-document.getElementById('contactWhatsapp').addEventListener('click', (e) => {
-    e.preventDefault();
-    window.open('https://wa.me/6281234567890', '_blank');
-});
-document.getElementById('buyAccessBtn').addEventListener('click', () => {
-    alert('Hubungi @Acunn di Telegram untuk beli akses!');
-});
+document.getElementById('contactTelegram').addEventListener('click', e => { e.preventDefault(); window.open('https://t.me/Acunn', '_blank'); });
+document.getElementById('contactWhatsapp').addEventListener('click', e => { e.preventDefault(); window.open('https://wa.me/6281234567890', '_blank'); });
+document.getElementById('buyAccessBtn').addEventListener('click', () => alert('Hubungi @Acunn di Telegram untuk beli akses!'));
 
-// Admin: tambah user
 document.getElementById('addUserBtn').addEventListener('click', async () => {
     const uname = document.getElementById('newUser').value.trim();
     const pass = document.getElementById('newPass').value.trim();
-    if (!uname || !pass) {
-        alert('Isi username dan password!');
-        return;
-    }
+    if (!uname || !pass) { alert('Isi username dan password!'); return; }
     const res = await apiCall('/api/admin/adduser', {
         method: 'POST',
-        body: JSON.stringify({ username: uname, password: pass })
+        body: JSON.stringify({ username: uname, password: pass, role: 'user', expired: null })
     });
     if (res.success) {
         alert('User ditambahkan!');
@@ -436,7 +415,6 @@ document.getElementById('addUserBtn').addEventListener('click', async () => {
     }
 });
 
-// Auto-login dari localStorage
 const savedToken = localStorage.getItem('bugacunn_token');
 const savedUser = localStorage.getItem('bugacunn_user');
 if (savedToken && savedUser) {
